@@ -8,6 +8,14 @@ Change your phone's sound automatically when you arrive somewhere or connect to 
 
 There are no ads and no accounts. Rules are stored only on the phone. The app uses the network for map tiles and place search only.
 
+<p align="center">
+  <img src="docs/screenshots/rules.png" width="260" alt="List of rules: a mall and an airport by location, office and home by Wi-Fi">
+  &nbsp;
+  <img src="docs/screenshots/edit-place.png" width="260" alt="Editing a location rule: map with a pin and a 250 m circle around the mall">
+  &nbsp;
+  <img src="docs/screenshots/setup.png" width="260" alt="First run: cards listing each permission with a Fix button">
+</p>
+
 ## Install
 
 Download the APK from [Releases](../../releases) and open it on your phone. You'll need to allow installing from your browser or file manager. The APK is signed with a development key, so Play Protect may warn about an unknown developer.
@@ -64,6 +72,8 @@ You need JDK 17+ and the Android SDK (platform 35). Android Studio works, or the
 ./gradlew assembleDebug                 # app/build/outputs/apk/debug/app-debug.apk
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
+
+To regenerate the README screenshots, run `tools/screenshots.sh` with a phone connected and unlocked. It installs a separate demo copy of the app (`com.rafeeh.rules.demo`), seeds it with sample rules, captures the screens and uninstalls it again. Your own rules are never touched.
 
 ## Known limits
 

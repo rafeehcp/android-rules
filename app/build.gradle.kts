@@ -23,6 +23,10 @@ android {
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("debug")
         }
+        create("screenshots") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".demo"
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

@@ -7,8 +7,6 @@ import android.net.wifi.WifiManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,6 +22,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -36,7 +37,6 @@ import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Slider
-import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -49,11 +49,13 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.rafeeh.rules.KnownNetworks
 import com.rafeeh.rules.Rule
 import com.rafeeh.rules.SoundAction
 import com.rafeeh.rules.Trigger
@@ -62,7 +64,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.osmdroid.util.GeoPoint
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditRuleScreen(
     initial: Rule,
@@ -167,11 +169,23 @@ fun EditRuleScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                val nearby = remember { context.nearbySsids() }
-                if (nearby.isNotEmpty()) {
-                    Text("Nearby networks", style = MaterialTheme.typography.bodySmall)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        nearby.forEach { SuggestionChip(onClick = { ssid = it }, label = { Text(it) }) }
+                val networks = remember { context.wifiChoices() }
+                val shown = networks.filter { ssid.isBlank() || it.ssid.contains(ssid, ignoreCase = true) }
+                if (networks.isNotEmpty()) {
+                    Text("Saved and nearby networks", style = MaterialTheme.typography.bodySmall)
+                    Card {
+                        shown.forEach { choice ->
+                            ListItem(
+                                headlineContent = { Text(choice.ssid) },
+                                supportingContent = choice.note?.let { { Text(it) } },
+                                leadingContent = { RadioButton(selected = ssid == choice.ssid, onClick = null) },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.selectable(ssid == choice.ssid, onClick = { ssid = choice.ssid }),
+                            )
+                        }
+                        if (shown.isEmpty()) {
+                            Text("No saved network matches. The name you typed will be used.", Modifier.padding(16.dp))
+                        }
                     }
                 }
             }
@@ -232,13 +246,21 @@ private fun Context.placeName(p: GeoPoint): String? = runCatching {
         .ifBlank { null }
 }.getOrNull()
 
+private data class WifiChoice(val ssid: String, val note: String?)
+
+/** Current network first, then saved networks (in range ones before the rest), then unsaved nearby ones. */
 @SuppressLint("MissingPermission")
 @Suppress("DEPRECATION")
-private fun Context.nearbySsids(): List<String> = runCatching {
+private fun Context.wifiChoices(): List<WifiChoice> {
     val wifi = getSystemService(WifiManager::class.java)
-    val current = wifi.connectionInfo?.ssid?.removeSurrounding("\"")?.takeIf { it != WifiManager.UNKNOWN_SSID }
-    (listOfNotNull(current) + wifi.scanResults.map { it.SSID })
-        .filter { it.isNotBlank() }
-        .distinct()
-        .take(12)
-}.getOrDefault(emptyList())
+    val current = runCatching { wifi.connectionInfo?.ssid?.removeSurrounding("\"") }.getOrNull()
+        ?.takeIf { it.isNotBlank() && it != WifiManager.UNKNOWN_SSID }
+    current?.let { KnownNetworks.remember(this, it) }
+    val nearby = runCatching { wifi.scanResults.map { it.SSID } }.getOrDefault(emptyList()).filter { it.isNotBlank() }.toSet()
+    val saved = KnownNetworks.load(this).sortedWith(compareBy({ it !in nearby }, { it.lowercase() }))
+    return buildList {
+        current?.let { add(WifiChoice(it, "Connected now")) }
+        saved.filter { it != current }.forEach { add(WifiChoice(it, if (it in nearby) "Saved · in range" else "Saved")) }
+        nearby.filter { it != current && it !in saved }.sorted().forEach { add(WifiChoice(it, "Nearby")) }
+    }
+}

@@ -28,7 +28,10 @@ class WifiWatchService : Service() {
     private val callback = object : ConnectivityManager.NetworkCallback(FLAG_INCLUDE_LOCATION_INFO) {
         override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
             val ssid = (caps.transportInfo as? WifiInfo)?.ssid?.removeSurrounding("\"")
-            if (ssid != null && ssid != WifiManager.UNKNOWN_SSID) apply(ssid)
+            if (ssid != null && ssid != WifiManager.UNKNOWN_SSID) {
+                KnownNetworks.remember(this@WifiWatchService, ssid)
+                apply(ssid)
+            }
         }
 
         override fun onLost(network: Network) = apply(null)

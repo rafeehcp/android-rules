@@ -21,6 +21,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import kotlinx.coroutines.delay
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ListItem
@@ -98,8 +104,30 @@ fun EditRuleScreen(
         }
     }
 
+    var here by remember { mutableStateOf<GeoPoint?>(null) }
+    var results by remember { mutableStateOf(emptyList<PlaceResult>()) }
+    var searching by remember { mutableStateOf(false) }
+    val keyboard = LocalSoftwareKeyboardController.current
+
     LaunchedEffect(Unit) {
-        if (isNew) context.currentLocation { focus = it }
+        context.currentLocation { here = it; if (isNew) focus = it }
+    }
+
+    LaunchedEffect(query) {
+        if (query.trim().length < 3) {
+            results = emptyList()
+            status = null
+            return@LaunchedEffect
+        }
+        delay(350)
+        searching = true
+        val found = try {
+            withContext(Dispatchers.IO) { searchPlaces(context, query.trim(), here ?: point) }
+        } finally {
+            searching = false
+        }
+        results = found
+        status = if (found.isEmpty()) "No places found for \"${query.trim()}\"" else null
     }
 
     val canSave = if (isPlace) point != null && label.isNotBlank() else ssid.isNotBlank()
@@ -131,18 +159,31 @@ fun EditRuleScreen(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = {
-                        scope.launch {
-                            val found = withContext(Dispatchers.IO) { context.search(query) }
-                            if (found == null) status = "No match for \"$query\"" else {
-                                status = null
-                                focus = found
-                                pick(found)
-                            }
-                        }
-                    }),
-                    trailingIcon = { Icon(Icons.Default.Search, null) },
+                    keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                    leadingIcon = { Icon(Icons.Default.Search, null) },
+                    trailingIcon = {
+                        if (searching) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+                        else if (query.isNotEmpty()) IconButton(onClick = { query = "" }) { Icon(Icons.Default.Close, "Clear") }
+                    },
                 )
+                if (results.isNotEmpty()) {
+                    Card {
+                        results.forEach { r ->
+                            ListItem(
+                                headlineContent = { Text(r.name) },
+                                supportingContent = r.detail.takeIf { it.isNotBlank() }?.let { { Text(it) } },
+                                colors = ListItemDefaults.colors(containerColor = Color.Transparent),
+                                modifier = Modifier.clickable {
+                                    keyboard?.hide()
+                                    focus = r.point
+                                    point = r.point
+                                    label = r.name
+                                    query = ""
+                                },
+                            )
+                        }
+                    }
+                }
                 Text("Tap the map to drop the pin.", style = MaterialTheme.typography.bodySmall)
                 MapPicker(
                     point = point,
@@ -231,11 +272,6 @@ private fun Context.currentLocation(onResult: (GeoPoint) -> Unit) {
             .addOnSuccessListener { loc -> loc?.let { onResult(GeoPoint(it.latitude, it.longitude)) } }
     }
 }
-
-@Suppress("DEPRECATION")
-private fun Context.search(query: String): GeoPoint? = runCatching {
-    Geocoder(this).getFromLocationName(query, 1)?.firstOrNull()?.let { GeoPoint(it.latitude, it.longitude) }
-}.getOrNull()
 
 @Suppress("DEPRECATION")
 private fun Context.placeName(p: GeoPoint): String? = runCatching {

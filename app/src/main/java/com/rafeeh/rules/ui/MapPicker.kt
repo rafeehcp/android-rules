@@ -2,12 +2,19 @@ package com.rafeeh.rules.ui
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.view.ViewOutlineProvider
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
 import org.osmdroid.events.MapEventsReceiver
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
@@ -23,12 +30,16 @@ fun MapPicker(
     onPick: (GeoPoint) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val shape = RoundedCornerShape(16.dp)
     AndroidView(
-        modifier = modifier,
+        modifier = modifier.clip(shape).border(1.dp, MaterialTheme.colorScheme.outlineVariant, shape),
         factory = { context ->
             MapView(context).apply {
                 setTileSource(TileSourceFactory.MAPNIK)
                 setMultiTouchControls(true)
+                zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
+                outlineProvider = ViewOutlineProvider.BOUNDS
+                clipToOutline = true
                 controller.setZoom(if (point != null) 17.0 else 4.0)
                 controller.setCenter(point ?: GeoPoint(20.0, 78.0))
                 setOnTouchListener { v, _ -> v.parent.requestDisallowInterceptTouchEvent(true); false }

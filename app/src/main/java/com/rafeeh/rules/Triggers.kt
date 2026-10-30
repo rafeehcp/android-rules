@@ -27,7 +27,7 @@ object Triggers {
     private fun syncGeofences(context: Context, rules: List<Rule>) {
         val client = LocationServices.getGeofencingClient(context)
         val intent = geofenceIntent(context)
-        client.removeGeofences(intent).addCompleteListener {
+        client.removeGeofences(intent).addOnCompleteListener {
             val fences = rules.mapNotNull { rule ->
                 val t = rule.trigger as? Trigger.Place ?: return@mapNotNull null
                 Geofence.Builder()
@@ -37,7 +37,7 @@ object Triggers {
                     .setTransitionTypes(Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT)
                     .build()
             }
-            if (fences.isEmpty() || !hasBackgroundLocation(context)) return@addCompleteListener
+            if (fences.isEmpty() || !hasBackgroundLocation(context)) return@addOnCompleteListener
             val request = GeofencingRequest.Builder()
                 .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER or GeofencingRequest.INITIAL_TRIGGER_EXIT)
                 .addGeofences(fences)

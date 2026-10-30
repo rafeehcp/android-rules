@@ -78,6 +78,7 @@ fun EditRuleScreen(
     onSave: (Rule) -> Unit,
     onDelete: () -> Unit,
     onCancel: () -> Unit,
+    sharedText: String? = null,
 ) {
     BackHandler(onBack = onCancel)
     val context = LocalContext.current
@@ -110,7 +111,28 @@ fun EditRuleScreen(
     val keyboard = LocalSoftwareKeyboardController.current
 
     LaunchedEffect(Unit) {
-        context.currentLocation { here = it; if (isNew) focus = it }
+        context.currentLocation { here = it; if (isNew && point == null) focus = it }
+    }
+
+    fun place(r: PlaceResult) {
+        keyboard?.hide()
+        focus = r.point
+        point = r.point
+        label = r.name
+        query = ""
+    }
+
+    LaunchedEffect(sharedText) {
+        if (sharedText == null) return@LaunchedEffect
+        isPlace = true
+        status = "Finding the place from Google Maps…"
+        val found = withContext(Dispatchers.IO) { MapsLink.resolve(context, sharedText) }
+        if (found != null) {
+            place(found)
+            status = null
+        } else {
+            status = "Couldn't read a location from that share. Try searching or tapping the map."
+        }
     }
 
     LaunchedEffect(query) {
@@ -121,8 +143,12 @@ fun EditRuleScreen(
         }
         delay(350)
         searching = true
+        val q = query.trim()
         val found = try {
-            withContext(Dispatchers.IO) { searchPlaces(context, query.trim(), here ?: point) }
+            withContext(Dispatchers.IO) {
+                if (MapsLink.coordinatesIn(q) != null || MapsLink.isMapsLink(q)) listOfNotNull(MapsLink.resolve(context, q))
+                else searchPlaces(context, q, here ?: point)
+            }
         } finally {
             searching = false
         }
@@ -155,7 +181,7 @@ fun EditRuleScreen(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    label = { Text("Search a place") },
+                    label = { Text("Search, or paste coordinates / a Maps link") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -173,18 +199,12 @@ fun EditRuleScreen(
                                 headlineContent = { Text(r.name) },
                                 supportingContent = r.detail.takeIf { it.isNotBlank() }?.let { { Text(it) } },
                                 colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-                                modifier = Modifier.clickable {
-                                    keyboard?.hide()
-                                    focus = r.point
-                                    point = r.point
-                                    label = r.name
-                                    query = ""
-                                },
+                                modifier = Modifier.clickable { place(r) },
                             )
                         }
                     }
                 }
-                Text("Tap the map to drop the pin.", style = MaterialTheme.typography.bodySmall)
+                Text("Tap the map to drop the pin. Can't find it? In Google Maps tap Share → Rules.", style = MaterialTheme.typography.bodySmall)
                 MapPicker(
                     point = point,
                     radiusM = radius,

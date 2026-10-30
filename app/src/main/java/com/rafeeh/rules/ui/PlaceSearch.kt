@@ -46,8 +46,9 @@ private fun photon(context: Context, query: String, near: GeoPoint?): List<Place
     }
 }
 
+/** Android's geocoder: Google's address data on Play devices, weak on business names. */
 @Suppress("DEPRECATION")
-private fun geocoder(context: Context, query: String): List<PlaceResult> = runCatching {
+fun geocoder(context: Context, query: String): List<PlaceResult> = runCatching {
     Geocoder(context).getFromLocationName(query, 8).orEmpty().map { a ->
         val name = a.featureName ?: a.getAddressLine(0) ?: query
         val detail = listOfNotNull(a.locality, a.adminArea, a.countryName).joinToString(", ")
